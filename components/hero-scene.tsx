@@ -34,7 +34,7 @@ function Machine() {
     const context = gsap.context(() => {
       if (!motion.current) return;
       const timeline = gsap.timeline({ scrollTrigger: {
-        trigger: ".hero", start: "top top", end: "+=850", scrub: 1.15,
+        trigger: ".hero-portal", start: "top top", end: "+=850", scrub: 1.15,
       }});
       timeline.to(motion.current.rotation, { y: .95, x: -.12 }, 0)
         .to(motion.current.position, { y: -.7, x: .6, z: -1 }, 0);
@@ -88,6 +88,11 @@ export default function HeroScene() {
       <pointLight position={[3,-1,-3]} intensity={90} distance={13} color="#82c4b4"/>
       <Machine/>
     </Canvas>
+    <img
+      src="/images/paper-to-digital.svg"
+      alt=""
+      className="three-wrap-overlay"
+    />
   </div></SceneErrorBoundary>;
 }
 

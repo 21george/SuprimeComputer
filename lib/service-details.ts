@@ -14,6 +14,7 @@ export type ServiceDetail = {
   steps: { title: string; text: string }[];
   important: string;
   faqs: { question: string; answer: string }[];
+  trainingTopics?: { name: string; duration: string; lead: string; description: string; examples: string[] }[];
 };
 
 export const serviceDetails: ServiceDetail[] = [
@@ -129,27 +130,54 @@ export const serviceDetails: ServiceDetail[] = [
     slug: "computer-training", number: "07", title: "Computer Training",
     titleLead: "Build useful skills.", titleAccent: "Gain confidence.",
     category: "PRACTICAL DIGITAL SKILLS", art: "training", visualLabel: "LEARN / PRACTISE",
-    summary: "Learn essential computer skills with practical training. Contact Supreme Computer to ask about current classes and schedules.",
-    overview: "Whether you are starting from the basics or looking to become more comfortable with everyday computer tasks, ask our team about available training options at the centre.",
+    summary: "Choose from a 3-month Computer Appreciation course or a 6-month programme covering essential Microsoft Office skills and CorelDRAW.",
+    overview: "Our 3-month Computer Appreciation course introduces practical computer skills, Microsoft Word and Microsoft Excel. For more advanced training, the 6-month course covers Microsoft Word, Excel, PowerPoint and CorelDRAW. Contact our centre for enrolment information and class schedules.",
     helps: [
-      { title: "Computer basics", text: "Discuss beginner-friendly training in using a computer and navigating common tasks." },
-      { title: "Everyday digital work", text: "Ask about practical skills for handling files, documents and typical computer activities." },
-      { title: "Personal learning goals", text: "Tell the team your current experience and what you want to learn so they can discuss suitable availability." },
+      { title: "3 months — Computer Appreciation", text: "Learn computer fundamentals and build practical skills in Microsoft Word and Microsoft Excel." },
+      { title: "6 months — Computer Training", text: "Study Microsoft Word, Microsoft Excel, Microsoft PowerPoint and CorelDRAW." },
+      { title: "Practical learning and guidance", text: "Ask about lesson times, course fees and which training option best matches your experience and goals." },
+    ],
+    trainingTopics: [
+      {
+        name: "Microsoft Word", duration: "3 & 6 MONTH COURSES",
+        lead: "Write and format professional documents.",
+        description: "Word is used to type, edit and arrange documents. It helps you create neatly formatted letters, applications, CVs and reports, then save or print them.",
+        examples: ["Letters and CVs", "School reports", "Tables and page layouts"],
+      },
+      {
+        name: "Microsoft Excel", duration: "3 & 6 MONTH COURSES",
+        lead: "Organise information and work with numbers.",
+        description: "Excel is a spreadsheet tool for keeping records and making calculations. You can use rows, columns and formulas to track expenses, prepare budgets, calculate totals and turn figures into simple charts.",
+        examples: ["Budgets and expenses", "Attendance and record lists", "Formulas and charts"],
+      },
+      {
+        name: "Microsoft PowerPoint", duration: "6 MONTH COURSE",
+        lead: "Turn your ideas into clear presentations.",
+        description: "PowerPoint is used to build slides for classwork, meetings and business presentations. Combine text, pictures, diagrams and charts into a story people can follow.",
+        examples: ["School presentations", "Business proposals", "Slides and visual storytelling"],
+      },
+      {
+        name: "CorelDRAW", duration: "6 MONTH COURSE",
+        lead: "Create designs ready to share or print.",
+        description: "CorelDRAW is a graphic design program used for designing flyers, business cards, posters, banners and other layouts with shapes, colours, images and text.",
+        examples: ["Flyers and posters", "Business cards", "Banners and layouts"],
+      },
     ],
     prepare: [
-      "Think about the computer tasks you want to feel more confident doing.",
+      "Decide whether the 3-month Computer Appreciation course or the 6-month training programme suits your goals.",
       "Let the team know whether you are a complete beginner or have some experience.",
-      "Contact the centre to confirm current topics, schedules, fees and any equipment requirements.",
+      "Contact the centre to confirm class availability, schedules, fees and any equipment requirements.",
     ],
     steps: [
-      { title: "Share your goals", text: "Tell us what you hope to learn and your current confidence level." },
-      { title: "Ask about sessions", text: "Confirm the available training format, timetable and fees." },
+      { title: "Choose a course", text: "Ask about the 3-month or 6-month option and tell us about your current computer skills." },
+      { title: "Confirm your schedule", text: "Check available class times, enrolment details and fees with our team." },
       { title: "Start learning", text: "Visit the centre at the agreed time and practise the available skills." },
     ],
-    important: "Training subjects, enrolment, schedules, duration, fees and any certificates must be confirmed with Supreme Computer directly; none is guaranteed by this website.",
+    important: "The listed courses run for 3 months and 6 months respectively. Contact Supreme Computer directly to confirm class availability, schedules, fees, enrolment requirements and any certificate arrangements.",
     faqs: [
-      { question: "Can someone with no computer experience join?", answer: "You can ask about beginner-level training. The team will confirm whether a suitable class or session is currently available." },
-      { question: "How much does training cost and when are classes?", answer: "Please contact the centre for the latest timetable, training topics and fees." },
+      { question: "What will I learn in the 3-month course?", answer: "The Computer Appreciation course covers computer fundamentals, Microsoft Word and Microsoft Excel." },
+      { question: "What will I learn in the 6-month course?", answer: "The 6-month programme covers Microsoft Word, Microsoft Excel, Microsoft PowerPoint and CorelDRAW." },
+      { question: "How much does training cost and when are classes?", answer: "Please contact the centre to confirm the current timetable, course availability and fees." },
     ],
   },
 ];

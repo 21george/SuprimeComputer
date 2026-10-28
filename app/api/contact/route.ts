@@ -1,14 +1,14 @@
 import { Resend } from "resend";
 import { z } from "zod";
-import { siteConfig } from "@/lib/site-config";
+import { isEnquiryConfigured, lookupServiceId, writePrivateRow, getAllCopy } from "@/lib/supabase-content";
 
-const recipient = process.env.RESEND_TO_EMAIL || siteConfig.email;
+const recipient = process.env.RESEND_TO_EMAIL || "computersupreme0@gmail.com";
 
 const contactSchema = z.object({
   name: z.string().trim().min(2).max(100),
   email: z.union([z.string().trim().email().max(254), z.literal("")]),
   phone: z.string().trim().max(35),
-  serviceId: z.enum(["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "general"]),
+  serviceId: z.union([z.string().regex(/^S\d{2}$/), z.literal("general")]),
   message: z.string().trim().min(10).max(1500),
   privacyAcknowledged: z.literal(true),
   website: z.string().max(200).optional(), // spam honeypot; never rendered to visitors
@@ -17,20 +17,11 @@ const contactSchema = z.object({
   path: ["email"],
 });
 
-const serviceNames: Record<string, string> = {
-  S01: "Typing & Typesetting", S02: "Photocopying & Scanning",
-  S03: "Passport Photos", S04: "Print From Your Phone",
-  S05: "NIN Assistance", S06: "WAEC & NECO Services",
-  S07: "Computer Training", S08: "Agreement & Documents",
-  S09: "Website Design & Development", S10: "Mobile App Development",
-  general: "General enquiry",
-};
-
 const rateWindowMs = 15 * 60 * 1000;
 const requests = new Map<string, { count: number; until: number }>();
 
 function configured() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL && recipient);
+  return isEnquiryConfigured;
 }
 
 export async function GET() {
@@ -40,8 +31,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const copy = await getAllCopy().catch(() => ({} as Record<string, string>));
+  const apiText = (key: string, fallback: string) => copy[`api.${key}`] || fallback;
+
   if (!configured()) {
-    return Response.json({ error: "Online enquiries are being configured. Please contact us directly." }, { status: 503 });
+    return Response.json({ error: apiText("error_not_configured", "Online enquiries are being configured. Please contact us directly.") }, { status: 503 });
   }
 
   const declaredSize = Number(request.headers.get("content-length") || 0);
@@ -65,7 +59,7 @@ export async function POST(request: Request) {
   const now = Date.now();
   const previous = requests.get(ip);
   if (previous && previous.until > now && previous.count >= 5) {
-    return Response.json({ error: "Too many enquiries. Please try again later or call us." }, { status: 429 });
+    return Response.json({ error: apiText("error_rate_limit", "Too many enquiries. Please try again later or call us.") }, { status: 429 });
   }
   if (requests.size > 2000) requests.clear();
   requests.set(ip, previous && previous.until > now
@@ -73,11 +67,32 @@ export async function POST(request: Request) {
     : { count: 1, until: now + rateWindowMs });
 
   const data = parsed.data;
-  const reference = crypto.randomUUID();
+  let serviceId: string | null = null;
+  try {
+    if (data.serviceId !== "general") {
+      serviceId = await lookupServiceId(data.serviceId);
+      if (!serviceId) return Response.json({ error: "Please choose an available service." }, { status: 400 });
+    }
+  } catch {
+    return Response.json({ error: apiText("error_service_unavailable", "We can't verify the selected service right now. Please try again.") }, { status: 503 });
+  }
+
+  let reference: string;
+  try {
+    const saved = await writePrivateRow<{ id: string }>("sc_contact_submissions", {
+      service_id: serviceId, name: data.name, email: data.email || null,
+      phone: data.phone || null, message: data.message, privacy_acknowledged: true,
+    });
+    reference = saved.id;
+  } catch {
+    return Response.json({ error: apiText("error_save_failed", "We couldn't save your enquiry. Please call or use WhatsApp instead.") }, { status: 503 });
+  }
+
+  const serviceName = data.serviceId === "general" ? "General enquiry" : `Service ${data.serviceId}`;
   const text = [
-    "New Supreme Computer website enquiry",
+    apiText("email_body_header", "New Supreme Computer website enquiry"),
     `Reference: ${reference}`,
-    `Service: ${serviceNames[data.serviceId]}`,
+    `Service: ${serviceName}`,
     `Name: ${data.name}`,
     `Email: ${data.email || "Not provided"}`,
     `Phone: ${data.phone || "Not provided"}`,
@@ -86,21 +101,35 @@ export async function POST(request: Request) {
     data.message,
   ].join("\n");
 
-  try {
+  let emailed = false;
+  let providerId: string | null = null;
+  let errorSummary: string | null = null;
+  const mailConfigured = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+  if (mailConfigured) try {
     const resend = new Resend(process.env.RESEND_API_KEY!);
-    const { error } = await resend.emails.send({
+    const { data: sent, error } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
       to: [recipient],
-      subject: `Supreme Computer enquiry — ${serviceNames[data.serviceId]}`,
+      subject: apiText("email_subject", "Supreme Computer enquiry") + ` — ${serviceName}`,
       text,
       ...(data.email ? { replyTo: data.email } : {}),
     });
-
-    if (error) {
-      return Response.json({ error: "We couldn't send the enquiry. Please call or use WhatsApp instead." }, { status: 502 });
-    }
-    return Response.json({ accepted: true, reference });
+    emailed = !error;
+    providerId = sent?.id || null;
+    errorSummary = error?.name || null;
   } catch {
-    return Response.json({ error: "Email service temporarily unavailable. Please call or use WhatsApp." }, { status: 502 });
+    errorSummary = "provider_error";
   }
+
+  // A saved enquiry is never lost just because email delivery was unsuccessful.
+  try {
+    await writePrivateRow("sc_email_notifications", {
+      contact_id: reference, provider: "resend", status: !mailConfigured ? "pending" : emailed ? "sent" : "failed",
+      provider_message_id: providerId, error_summary: errorSummary || (!mailConfigured ? "not_configured" : null),
+      attempted_at: emailed || errorSummary ? new Date().toISOString() : null,
+    });
+  } catch {
+    // The contact row is the durable source of truth; don't misreport it as lost.
+  }
+  return Response.json({ accepted: true, reference, emailed }, { status: 201 });
 }
