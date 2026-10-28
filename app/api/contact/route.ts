@@ -1,8 +1,19 @@
-import { Resend } from "resend";
+import { createTransport } from "nodemailer";
 import { z } from "zod";
 import { isEnquiryConfigured, lookupServiceId, writePrivateRow, getAllCopy } from "@/lib/supabase-content";
 
-const recipient = process.env.RESEND_TO_EMAIL || "computersupreme0@gmail.com";
+const recipient = process.env.SMTP_TO_EMAIL || process.env.RESEND_TO_EMAIL || "computersupreme0@gmail.com";
+const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || "Supreme Computer <computersupreme0@gmail.com>";
+
+const transporter = createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: Number(process.env.SMTP_PORT || 465),
+  secure: (process.env.SMTP_SECURE || "true") === "true",
+  auth: {
+    user: process.env.SMTP_USER || "",
+    pass: process.env.SMTP_PASS || "",
+  },
+});
 
 const contactSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -102,34 +113,55 @@ export async function POST(request: Request) {
   ].join("\n");
 
   let emailed = false;
-  let providerId: string | null = null;
+  let confirmation = false;
   let errorSummary: string | null = null;
-  const mailConfigured = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+  const mailConfigured = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
   if (mailConfigured) try {
-    const resend = new Resend(process.env.RESEND_API_KEY!);
-    const { data: sent, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
-      to: [recipient],
+    // Owner notification
+    const info = await transporter.sendMail({
+      from: fromEmail,
+      to: recipient,
       subject: apiText("email_subject", "Supreme Computer enquiry") + ` — ${serviceName}`,
       text,
       ...(data.email ? { replyTo: data.email } : {}),
     });
-    emailed = !error;
-    providerId = sent?.id || null;
-    errorSummary = error?.name || null;
-  } catch {
-    errorSummary = "provider_error";
+    emailed = info.accepted.length > 0;
+
+    // Sender confirmation
+    if (data.email) {
+      const confirmText = [
+        apiText("confirm_body_header", "Thank you for contacting Supreme Computer."),
+        "",
+        `Reference: ${reference}`,
+        `Service: ${serviceName}`,
+        `Name: ${data.name}`,
+        "",
+        "We have received your enquiry and will be in touch shortly.",
+        "",
+        "Your message:",
+        data.message,
+      ].join("\n");
+      await transporter.sendMail({
+        from: fromEmail,
+        to: data.email,
+        subject: apiText("confirm_subject", "We received your enquiry") + ` — ${serviceName}`,
+        text: confirmText,
+      });
+      confirmation = true;
+    }
+  } catch (err) {
+    errorSummary = err instanceof Error ? err.message : "provider_error";
   }
 
   // A saved enquiry is never lost just because email delivery was unsuccessful.
   try {
     await writePrivateRow("sc_email_notifications", {
-      contact_id: reference, provider: "resend", status: !mailConfigured ? "pending" : emailed ? "sent" : "failed",
-      provider_message_id: providerId, error_summary: errorSummary || (!mailConfigured ? "not_configured" : null),
+      contact_id: reference, provider: "gmail-smtp", status: !mailConfigured ? "pending" : emailed ? "sent" : "failed",
+      provider_message_id: null, error_summary: errorSummary || (!mailConfigured ? "not_configured" : null),
       attempted_at: emailed || errorSummary ? new Date().toISOString() : null,
     });
   } catch {
     // The contact row is the durable source of truth; don't misreport it as lost.
   }
-  return Response.json({ accepted: true, reference, emailed }, { status: 201 });
+  return Response.json({ accepted: true, reference, emailed, confirmation }, { status: 201 });
 }

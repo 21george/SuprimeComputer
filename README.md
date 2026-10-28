@@ -9,7 +9,7 @@ Standalone, responsive Supreme Computer website built with **Next.js 16 (App Rou
 - Reusable React components, five service detail pages, and 10 service cards.
 - Route-level skeleton loading for the homepage and service-detail routes (`app/loading.tsx` and `app/services/loading.tsx`).
 - Editable public content, business details, training topics, opening hours and image URLs from Supabase.
-- Server-only contact enquiry storage in Supabase, with optional Resend email notifications.
+- Server-only contact enquiry storage in Supabase, with Gmail SMTP email notifications (owner + confirmation).
 - RLS-based read-only permissions for public content; enquiries and notification logs remain private.
 - The public website continues with its initial content if Supabase environment variables haven't been configured.
 
@@ -40,12 +40,17 @@ SUPABASE_URL=https://vdesszrjvlxokmfofurv.supabase.co
 SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SECRET_KEY=your-server-only-secret-key
 
-RESEND_API_KEY=your-server-only-resend-key
-RESEND_FROM_EMAIL=Supreme Computer <hello@your-verified-domain.com>
-RESEND_TO_EMAIL=computersupreme0@gmail.com
+# Gmail SMTP
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=computersupreme0@gmail.com
+SMTP_PASS=your-gmail-app-password
+SMTP_FROM_EMAIL=Supreme Computer <computersupreme0@gmail.com>
+SMTP_TO_EMAIL=computersupreme0@gmail.com
 ```
 
-**Never commit `.env.local`, publish the Supabase secret key, or include it in client-side environment variables.** The contact endpoint works only after both the Supabase publishable and secret keys have been configured. If Resend is not configured, submissions can still be stored in Supabase; the UI reports that the email notification is pending.
+**Never commit `.env.local`, publish the Supabase secret key, or include it in client-side environment variables.** The contact endpoint works only after both the Supabase publishable and secret keys have been configured. If Gmail SMTP is not configured, submissions can still be stored in Supabase; the UI reports that the email notification is pending.
 
 For security notes, data-table descriptions, and setup details, see [`supabase/README.md`](supabase/README.md).
 
@@ -77,9 +82,9 @@ To regenerate, install ffmpeg, run `npm ci`, then `npm run video:iphone`.
 
 1. Add the project to a Git repository (or import the project into Vercel).
 2. Select **Next.js** as the framework and keep its default build/output settings.
-3. Set the six environment variables in the hosting dashboard. Never add private keys to the repo.
+3. Set the environment variables in the hosting dashboard. Never add private keys to the repo.
 4. Ensure both Supabase SQL files have been executed before enabling the publishable key.
-5. Deploy, then verify service pages, Supabase content edits, the contact form, and Resend delivery.
+5. Deploy, then verify service pages, Supabase content edits, the contact form, and email delivery.
 
 The built-in in-memory contact rate limiter is only best-effort per server instance. Before broad public launch, add a shared rate limit or challenge, confirm an enquiry-retention policy and review the privacy notice.
 
@@ -94,7 +99,7 @@ The built-in in-memory contact rate limiter is only best-effort per server insta
 | `components/page-transitions.tsx` | Shared page-change animation and route prefetching |
 | `scripts/create-iphone-promo.mjs` | Rebuild the vertical iPhone promo video |
 | `lib/supabase-content.ts` | Server-only database queries and private writes |
-| `app/api/contact/route.ts` | Validated contact submission and Resend delivery |
+| `app/api/contact/route.ts` | Validated contact submission and Gmail SMTP delivery |
 | `supabase/001_schema.sql` | Database schema and RLS policies |
 | `supabase/002_seed.sql` | One-time website-content import |
 | `public/images`, `public/videos` | Illustrations and training reel |
