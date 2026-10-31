@@ -5,6 +5,10 @@ import { isEnquiryConfigured, lookupServiceId, writePrivateRow, getAllCopy } fro
 const recipient = process.env.SMTP_TO_EMAIL || process.env.RESEND_TO_EMAIL || "computersupreme0@gmail.com";
 const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || "Supreme Computer <computersupreme0@gmail.com>";
 
+const whatsappPhone = process.env.WHATSAPP_PHONE || "";
+const whatsappApiKey = process.env.WHATSAPP_API_KEY || "";
+const whatsappEnabled = (process.env.WHATSAPP_ENABLED || "false") === "true";
+
 const transporter = createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
   port: Number(process.env.SMTP_PORT || 465),
@@ -33,6 +37,20 @@ const requests = new Map<string, { count: number; until: number }>();
 
 function configured() {
   return isEnquiryConfigured;
+}
+
+async function sendWhatsApp(text: string): Promise<{ ok: boolean; error?: string }> {
+  if (!whatsappEnabled || !whatsappPhone || !whatsappApiKey) return { ok: false, error: "not_configured" };
+  const phone = whatsappPhone.replace(/\D/g, "");
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(whatsappApiKey)}`;
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    const body = await response.text();
+    if (response.ok && body.toLowerCase().includes("success")) return { ok: true };
+    return { ok: false, error: body.slice(0, 200) || `http_${response.status}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "network_error" };
+  }
 }
 
 export async function GET() {
@@ -114,10 +132,13 @@ export async function POST(request: Request) {
 
   let emailed = false;
   let confirmation = false;
+  let whatsappSent = false;
   let errorSummary: string | null = null;
+  let whatsappError: string | null = null;
   const mailConfigured = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  // Owner notification — email
   if (mailConfigured) try {
-    // Owner notification
     const info = await transporter.sendMail({
       from: fromEmail,
       to: recipient,
@@ -153,7 +174,22 @@ export async function POST(request: Request) {
     errorSummary = err instanceof Error ? err.message : "provider_error";
   }
 
-  // A saved enquiry is never lost just because email delivery was unsuccessful.
+  // Owner notification — WhatsApp via CallMeBot
+  const whatsappText = [
+    apiText("whatsapp_header", "*New Supreme Computer enquiry*"),
+    `Ref: ${reference}`,
+    `Service: ${serviceName}`,
+    `Name: ${data.name}`,
+    `Email: ${data.email || "Not provided"}`,
+    `Phone: ${data.phone || "Not provided"}`,
+    "",
+    data.message.slice(0, 800),
+  ].join("\n");
+  const waResult = await sendWhatsApp(whatsappText);
+  whatsappSent = waResult.ok;
+  whatsappError = waResult.error || null;
+
+  // Log delivery attempts. A saved enquiry is never lost just because delivery was unsuccessful.
   try {
     await writePrivateRow("sc_email_notifications", {
       contact_id: reference, provider: "gmail-smtp", status: !mailConfigured ? "pending" : emailed ? "sent" : "failed",
@@ -161,7 +197,17 @@ export async function POST(request: Request) {
       attempted_at: emailed || errorSummary ? new Date().toISOString() : null,
     });
   } catch {
-    // The contact row is the durable source of truth; don't misreport it as lost.
+    // The contact row is the durable source of truth.
   }
-  return Response.json({ accepted: true, reference, emailed, confirmation }, { status: 201 });
+  try {
+    await writePrivateRow("sc_email_notifications", {
+      contact_id: reference, provider: "callmebot-whatsapp", status: whatsappSent ? "sent" : "failed",
+      provider_message_id: null, error_summary: whatsappError,
+      attempted_at: new Date().toISOString(),
+    });
+  } catch {
+    // If the unique constraint on contact_id is still present, the second log may fail.
+  }
+
+  return Response.json({ accepted: true, reference, emailed, confirmation, whatsapp: whatsappSent }, { status: 201 });
 }

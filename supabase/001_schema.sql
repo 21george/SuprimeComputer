@@ -162,7 +162,7 @@ create table if not exists public.sc_contact_submissions (
 
 create table if not exists public.sc_email_notifications (
   id uuid primary key default gen_random_uuid(),
-  contact_id uuid not null unique references public.sc_contact_submissions(id) on delete cascade,
+  contact_id uuid not null references public.sc_contact_submissions(id) on delete cascade,
   provider text not null default 'resend',
   status text not null default 'pending' check (status in ('pending', 'sent', 'failed')),
   provider_message_id text,
