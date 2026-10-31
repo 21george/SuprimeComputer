@@ -10,7 +10,7 @@
     "video:iphone": "node scripts/create-iphone-promo.mjs"
   },
   "engines": {
-    "node": ">=22.13.0"
+    "node": "22.13.0"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
